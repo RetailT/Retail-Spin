@@ -9,10 +9,10 @@ async function getActiveItems(req, res) {
   try {
     const pool = await getPool();
     const result = await pool.request().query(`
-      SELECT ITEM_ID, ITEM_NAME, ITEM_DESCRIPTION, ITEM_WEIGHT, STOCK_QTY
+      SELECT IDX, ITEM_NAME, ITEM_DESCRIPTION, ITEM_WEIGHT, STOCK_QTY
       FROM dbo.tb_SPIN_ITEMS
       WHERE IS_ACTIVE = 1 AND STOCK_QTY > 0
-      ORDER BY ITEM_ID ASC
+      ORDER BY IDX ASC
     `);
     res.status(200).json({ success: true, items: result.recordset });
   } catch (err) {
@@ -54,7 +54,7 @@ async function playSpin(req, res) {
     // Prevent duplicate spin for the same invoice
     const existing = await request
       .input('invoiceNoCheck', sql.NVarChar(50), invoiceNo)
-      .query(`SELECT ID FROM dbo.tb_SPIN_CUSTOMERS WHERE INVOICE_NO = @invoiceNoCheck`);
+      .query(`SELECT IDX FROM dbo.tb_SPIN_CUSTOMERS WHERE INVOICE_NO = @invoiceNoCheck`);
 
     if (existing.recordset.length > 0) {
       await transaction.rollback();
@@ -71,7 +71,7 @@ async function playSpin(req, res) {
     if (Math.random() < WIN_CHANCE) {
       // fetch in-stock active items within the same transaction
       const itemsResult = await new sql.Request(transaction).query(`
-        SELECT ITEM_ID, ITEM_NAME, ITEM_WEIGHT, STOCK_QTY
+        SELECT IDX, ITEM_NAME, ITEM_WEIGHT, STOCK_QTY
         FROM dbo.tb_SPIN_ITEMS WITH (UPDLOCK, ROWLOCK)
         WHERE IS_ACTIVE = 1 AND STOCK_QTY > 0
       `);
@@ -79,13 +79,13 @@ async function playSpin(req, res) {
       if (itemsResult.recordset.length > 0) {
         const chosen = pickWeightedItem(itemsResult.recordset);
         isWinner = true;
-        wonItemId = chosen.ITEM_ID;
+        wonItemId = chosen.IDX;
         wonItemName = chosen.ITEM_NAME;
 
         // decrement stock
         await new sql.Request(transaction)
           .input('itemId', sql.Int, wonItemId)
-          .query(`UPDATE dbo.tb_SPIN_ITEMS SET STOCK_QTY = STOCK_QTY - 1 WHERE ITEM_ID = @itemId`);
+          .query(`UPDATE dbo.tb_SPIN_ITEMS SET STOCK_QTY = STOCK_QTY - 1 WHERE IDX = @itemId`);
       }
       // if no stock left anywhere, falls through as TRY AGAIN automatically
     }
@@ -100,7 +100,7 @@ async function playSpin(req, res) {
       .query(`
         INSERT INTO dbo.tb_SPIN_CUSTOMERS
           (CUSTOMER_NAME, INVOICE_NO, PHONE_NO, WON_ITEM_ID, WON_ITEM_NAME, IS_WINNER)
-        OUTPUT INSERTED.ID, INSERTED.INSERT_TIME, INSERTED.EXPIRED_TIME
+        OUTPUT INSERTED.IDX, INSERTED.INSERT_TIME, INSERTED.EXPIRED_TIME
         VALUES (@customerName, @invoiceNo, @phoneNo, @wonItemId, @wonItemName, @isWinner)
       `);
 
@@ -113,7 +113,7 @@ async function playSpin(req, res) {
       isWinner,
       wonItemId,
       wonItemName,
-      spinRecordId: inserted.ID,
+      spinRecordId: inserted.IDX,
       insertTime: inserted.INSERT_TIME,
       expiredTime: inserted.EXPIRED_TIME
     });
@@ -129,10 +129,10 @@ async function getSpinHistory(req, res) {
   try {
     const pool = await getPool();
     const result = await pool.request().query(`
-      SELECT TOP 200 ID, CUSTOMER_NAME, INVOICE_NO, PHONE_NO,
+      SELECT TOP 200 IDX, CUSTOMER_NAME, INVOICE_NO, PHONE_NO,
              WON_ITEM_NAME, IS_WINNER, IS_REDEEMED, INSERT_TIME, EXPIRED_TIME
       FROM dbo.tb_SPIN_CUSTOMERS
-      ORDER BY ID DESC
+      ORDER BY IDX DESC
     `);
     res.status(200).json({ success: true, records: result.recordset });
   } catch (err) {
