@@ -7,18 +7,16 @@ import { playSpin } from './api/api';
 
 export default function App() {
   const [spinning, setSpinning] = useState(false);
-  const [spinToken, setSpinToken] = useState(0);
+  // IMPORTANT: starts as null, not 0. SpinWheel treats null/undefined as "no spin yet".
+  // If this started at 0, the wheel would auto-spin on page load (before the
+  // customer even fills the form) because 0 !== the ref's initial null value.
+  const [spinToken, setSpinToken] = useState(null);
   const [targetIndex, setTargetIndex] = useState(0);
   const [result, setResult] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [resetSignal, setResetSignal] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Single slot for validation errors: { message, source }
-  // source is 'wheel' -> renders under the wheel, 'form' -> renders under the form.
-  // Because it's one state, setting a new one always replaces/clears the other —
-  // so only ever one error is visible, in the right place, regardless of which
-  // button triggered it.
   const [validation, setValidation] = useState({ message: '', source: null });
 
   const formRef = useRef(null);
@@ -31,19 +29,17 @@ export default function App() {
   const handleCustomerSubmit = async (customer) => {
     setErrorMsg('');
     setShowModal(false);
-    setResult(null); // clear any previous win banner before this new spin
+    setResult(null);
     setSpinning(true);
     wheelRef.current?.scrollIntoView();
 
     try {
       const res = await playSpin(customer);
-
-      // Segment 0 is the single "win" slot; segments 1-9 are all "Try Again".
       const idx = res.isWinner ? 0 : 1 + Math.floor(Math.random() * 9);
 
       setTargetIndex(idx);
       setResult(res);
-      setSpinToken((t) => t + 1); // triggers the wheel animation
+      setSpinToken((t) => (t || 0) + 1); // triggers the wheel animation
     } catch (err) {
       console.error(err);
       const msg = err.response?.data?.message || 'Spin failed. Please try again.';
@@ -55,11 +51,9 @@ export default function App() {
   const handleSpinComplete = () => {
     setSpinning(false);
     setShowModal(true);
-    setResetSignal((t) => t + 1); // clears the form once the spin finishes
+    setResetSignal((t) => t + 1);
   };
 
-  // Center "SPIN" hub on the wheel: validates via the form; error (if any)
-  // will render UNDER THE WHEEL because CustomerForm tags it source: 'wheel'.
   const handleCenterClick = () => {
     formRef.current?.submitFromWheel();
   };
@@ -86,7 +80,6 @@ export default function App() {
           onValidationResult={handleValidationResult}
         />
 
-        {/* Error from the FORM's own "Spin Now" button — only when source === 'form' */}
         {validation.source === 'form' && (
           <p className="w-full max-w-sm text-red-500 text-sm font-medium text-center bg-red-50 border border-red-100 rounded-lg px-3 py-2 -mt-4">
             {validation.message}
@@ -103,7 +96,6 @@ export default function App() {
           onCenterClick={handleCenterClick}
         />
 
-        {/* Error from the WHEEL's center-hub click — only when source === 'wheel' */}
         {validation.source === 'wheel' && (
           <p className="w-full max-w-sm text-red-500 text-sm font-medium text-center bg-red-50 border border-red-100 rounded-lg px-3 py-2 -mt-4">
             {validation.message}
