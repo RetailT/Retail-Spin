@@ -7,9 +7,6 @@ import { playSpin } from './api/api';
 
 export default function App() {
   const [spinning, setSpinning] = useState(false);
-  // IMPORTANT: starts as null, not 0. SpinWheel treats null/undefined as "no spin yet".
-  // If this started at 0, the wheel would auto-spin on page load (before the
-  // customer even fills the form) because 0 !== the ref's initial null value.
   const [spinToken, setSpinToken] = useState(null);
   const [targetIndex, setTargetIndex] = useState(0);
   const [result, setResult] = useState(null);
@@ -39,7 +36,7 @@ export default function App() {
 
       setTargetIndex(idx);
       setResult(res);
-      setSpinToken((t) => (t || 0) + 1); // triggers the wheel animation
+      setSpinToken((t) => (t || 0) + 1);
     } catch (err) {
       console.error(err);
       const msg = err.response?.data?.message || 'Spin failed. Please try again.';
@@ -48,15 +45,31 @@ export default function App() {
     }
   };
 
+  // Spin animation finished: show the result modal, but keep the form
+  // disabled and DON'T reset/refocus it yet. If we reset+refocus here,
+  // the form becomes live (empty + focused) WHILE the modal is still open —
+  // so pressing Enter to dismiss the modal also bubbles into the form and
+  // triggers a submit-with-empty-fields validation error underneath it.
   const handleSpinComplete = () => {
     setSpinning(false);
     setShowModal(true);
+  };
+
+  // Only reset and refocus the form once the modal is actually closed —
+  // this is the single moment the form becomes interactive again, so
+  // there's no overlap where a stray Enter press can hit both at once.
+  const handleModalClose = () => {
+    setShowModal(false);
     setResetSignal((t) => t + 1);
   };
 
   const handleCenterClick = () => {
     formRef.current?.submitFromWheel();
   };
+
+  // Form (and Enter-to-submit) stays disabled while the modal is showing,
+  // not just while the wheel is physically spinning.
+  const formDisabled = spinning || showModal;
 
   const showCelebration = !spinning && result?.isWinner;
 
@@ -75,15 +88,12 @@ export default function App() {
         <CustomerForm
           ref={formRef}
           onSubmit={handleCustomerSubmit}
-          disabled={spinning}
+          disabled={formDisabled}
           resetSignal={resetSignal}
           onValidationResult={handleValidationResult}
         />
 
-        {/* Single validation slot, always rendered between the form and the wheel —
-            regardless of whether the error came from the form's own submit button
-            or from clicking the wheel's center hub without filling details. */}
-        {validation.message && (
+        {validation.source === 'form' && (
           <p className="w-full max-w-sm text-red-500 text-sm font-medium text-center bg-red-50 border border-red-100 rounded-lg px-3 py-2 -mt-4">
             {validation.message}
           </p>
@@ -99,6 +109,12 @@ export default function App() {
           onCenterClick={handleCenterClick}
         />
 
+        {validation.source === 'wheel' && (
+          <p className="w-full max-w-sm text-red-500 text-sm font-medium text-center bg-red-50 border border-red-100 rounded-lg px-3 py-2 -mt-4">
+            {validation.message}
+          </p>
+        )}
+
         {showCelebration && (
           <WinCelebration
             itemName={result.wonItemName}
@@ -111,7 +127,7 @@ export default function App() {
         )}
       </div>
 
-      <ResultModal result={showModal ? result : null} onClose={() => setShowModal(false)} />
+      <ResultModal result={showModal ? result : null} onClose={handleModalClose} />
     </div>
   );
 }
