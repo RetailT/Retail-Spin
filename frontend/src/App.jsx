@@ -45,19 +45,11 @@ export default function App() {
     }
   };
 
-  // Spin animation finished: show the result modal, but keep the form
-  // disabled and DON'T reset/refocus it yet. If we reset+refocus here,
-  // the form becomes live (empty + focused) WHILE the modal is still open —
-  // so pressing Enter to dismiss the modal also bubbles into the form and
-  // triggers a submit-with-empty-fields validation error underneath it.
   const handleSpinComplete = () => {
     setSpinning(false);
     setShowModal(true);
   };
 
-  // Only reset and refocus the form once the modal is actually closed —
-  // this is the single moment the form becomes interactive again, so
-  // there's no overlap where a stray Enter press can hit both at once.
   const handleModalClose = () => {
     setShowModal(false);
     setResetSignal((t) => t + 1);
@@ -67,8 +59,6 @@ export default function App() {
     formRef.current?.submitFromWheel();
   };
 
-  // Form (and Enter-to-submit) stays disabled while the modal is showing,
-  // not just while the wheel is physically spinning.
   const formDisabled = spinning || showModal;
 
   const showCelebration = !spinning && result?.isWinner;
@@ -99,6 +89,13 @@ export default function App() {
           </p>
         )}
 
+        {showCelebration && (
+          <WinCelebration
+            itemName={result.wonItemName}
+            onDismiss={() => setResult(null)}
+          />
+        )}
+
         <SpinWheel
           ref={wheelRef}
           segments={WHEEL_SEGMENTS}
@@ -113,13 +110,6 @@ export default function App() {
           <p className="w-full max-w-sm text-red-500 text-sm font-medium text-center bg-red-50 border border-red-100 rounded-lg px-3 py-2 -mt-4">
             {validation.message}
           </p>
-        )}
-
-        {showCelebration && (
-          <WinCelebration
-            itemName={result.wonItemName}
-            onDismiss={() => setResult(null)}
-          />
         )}
 
         {errorMsg && (

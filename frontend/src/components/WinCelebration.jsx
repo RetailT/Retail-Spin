@@ -28,7 +28,7 @@ function ConfettiPiece({ index }) {
 
 /**
  * itemName: the won item's name (falsy => component renders nothing)
- * onDismiss: optional — shows a small "Dismiss" link if provided
+ * onDismiss: optional — shows a "Dismiss" button if provided
  */
 export default function WinCelebration({ itemName, onDismiss }) {
   if (!itemName) return null;
@@ -62,12 +62,12 @@ export default function WinCelebration({ itemName, onDismiss }) {
         <p className="text-xs font-semibold tracking-widest text-amber-600 uppercase mb-1">
           You Won
         </p>
-        <p className="text-lg font-extrabold text-gray-900">{itemName}</p>
+        <p className="text-lg font-extrabold text-gray-900 mb-3">{itemName}</p>
 
         {onDismiss && (
           <button
             onClick={onDismiss}
-            className="mt-3 text-xs font-medium text-gray-400 hover:text-gray-600 underline"
+            className="bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold px-6 py-2.5 rounded-xl transition"
           >
             Dismiss
           </button>
