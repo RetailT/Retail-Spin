@@ -80,7 +80,10 @@ export default function App() {
           onValidationResult={handleValidationResult}
         />
 
-        {validation.source === 'form' && (
+        {/* Single validation slot, always rendered between the form and the wheel —
+            regardless of whether the error came from the form's own submit button
+            or from clicking the wheel's center hub without filling details. */}
+        {validation.message && (
           <p className="w-full max-w-sm text-red-500 text-sm font-medium text-center bg-red-50 border border-red-100 rounded-lg px-3 py-2 -mt-4">
             {validation.message}
           </p>
@@ -95,12 +98,6 @@ export default function App() {
           onSpinComplete={handleSpinComplete}
           onCenterClick={handleCenterClick}
         />
-
-        {validation.source === 'wheel' && (
-          <p className="w-full max-w-sm text-red-500 text-sm font-medium text-center bg-red-50 border border-red-100 rounded-lg px-3 py-2 -mt-4">
-            {validation.message}
-          </p>
-        )}
 
         {showCelebration && (
           <WinCelebration
