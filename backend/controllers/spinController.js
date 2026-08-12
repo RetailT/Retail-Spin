@@ -1,4 +1,4 @@
-const { sql, getPool } = require('../config/db');
+const { sql } = require('../config/shopDb'); // just need `sql` types here, pool comes from req
 
 // ⚠️ TESTING VALUE — bumped from 0.10 to 0.50 so wins are easy to trigger while you're
 // checking the winner UI/celebration flow. REVERT TO 0.10 before going live.
@@ -7,7 +7,7 @@ const WIN_CHANCE = 0.50;
 // GET /api/spin/items  -> active items, used by frontend to draw the wheel
 async function getActiveItems(req, res) {
   try {
-    const pool = await getPool();
+    const pool = req.shopPool; // resolved by resolveShopMiddleware based on caller's IP
     const result = await pool.request().query(`
       SELECT IDX, ITEM_NAME, ITEM_DESCRIPTION, ITEM_WEIGHT, STOCK_QTY
       FROM dbo.tb_SPIN_ITEMS
@@ -44,7 +44,7 @@ async function playSpin(req, res) {
     });
   }
 
-  const pool = await getPool();
+  const pool = req.shopPool; // resolved by resolveShopMiddleware based on caller's IP
   const transaction = new sql.Transaction(pool);
 
   try {
@@ -69,7 +69,6 @@ async function playSpin(req, res) {
     let wonItemName = 'TRY AGAIN';
 
     if (Math.random() < WIN_CHANCE) {
-      // fetch in-stock active items within the same transaction
       const itemsResult = await new sql.Request(transaction).query(`
         SELECT IDX, ITEM_NAME, ITEM_WEIGHT, STOCK_QTY
         FROM dbo.tb_SPIN_ITEMS WITH (UPDLOCK, ROWLOCK)
@@ -82,12 +81,10 @@ async function playSpin(req, res) {
         wonItemId = chosen.IDX;
         wonItemName = chosen.ITEM_NAME;
 
-        // decrement stock
         await new sql.Request(transaction)
           .input('itemId', sql.Int, wonItemId)
           .query(`UPDATE dbo.tb_SPIN_ITEMS SET STOCK_QTY = STOCK_QTY - 1 WHERE IDX = @itemId`);
       }
-      // if no stock left anywhere, falls through as TRY AGAIN automatically
     }
 
     const insertResult = await new sql.Request(transaction)
@@ -127,7 +124,7 @@ async function playSpin(req, res) {
 // GET /api/spin/history  (optional - for admin/reporting view)
 async function getSpinHistory(req, res) {
   try {
-    const pool = await getPool();
+    const pool = req.shopPool;
     const result = await pool.request().query(`
       SELECT TOP 200 IDX, CUSTOMER_NAME, INVOICE_NO, PHONE_NO,
              WON_ITEM_NAME, IS_WINNER, IS_REDEEMED, INSERT_TIME, EXPIRED_TIME
