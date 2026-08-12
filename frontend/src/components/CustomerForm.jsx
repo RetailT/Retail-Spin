@@ -1,4 +1,4 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
 // Accepts Sri Lankan mobile/landline numbers: 07XXXXXXXX, 0XXXXXXXXX, or 94XXXXXXXXX
 const PHONE_REGEX = /^(0\d{9}|94\d{9})$/;
@@ -12,12 +12,22 @@ const CustomerForm = forwardRef(function CustomerForm({ onSubmit, disabled, rese
   const [invoiceNo, setInvoiceNo] = useState('');
   const [phoneNo, setPhoneNo] = useState('');
 
+  const nameInputRef = useRef(null);
+
+  // Focus the first field the moment this form mounts (i.e. right when the page loads),
+  // so the cashier can start typing the customer name immediately without clicking in.
+  useEffect(() => {
+    nameInputRef.current?.focus();
+  }, []);
+
   useEffect(() => {
     if (resetSignal === undefined || resetSignal === null) return;
     setCustomerName('');
     setInvoiceNo('');
     setPhoneNo('');
     onValidationResult?.(null, null);
+    // Also re-focus the name field after a spin finishes, ready for the next customer.
+    nameInputRef.current?.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetSignal]);
 
@@ -82,6 +92,7 @@ const CustomerForm = forwardRef(function CustomerForm({ onSubmit, disabled, rese
         <div>
           <label className="block text-sm font-medium text-gray-600 mb-1.5">Customer Name</label>
           <input
+            ref={nameInputRef}
             type="text"
             placeholder="e.g. Kasun Perera"
             value={customerName}
