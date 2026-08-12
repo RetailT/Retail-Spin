@@ -16,7 +16,7 @@ export default function App() {
 
   // Single slot for validation errors: { message, source }
   // source is 'wheel' -> renders under the wheel, 'form' -> renders under the form.
-  // Because it's one state, setting a new one always replaces/clears the old one —
+  // Because it's one state, setting a new one always replaces/clears the other —
   // so only ever one error is visible, in the right place, regardless of which
   // button triggered it.
   const [validation, setValidation] = useState({ message: '', source: null });
@@ -78,6 +78,21 @@ export default function App() {
           </p>
         </div>
 
+        <CustomerForm
+          ref={formRef}
+          onSubmit={handleCustomerSubmit}
+          disabled={spinning}
+          resetSignal={resetSignal}
+          onValidationResult={handleValidationResult}
+        />
+
+        {/* Error from the FORM's own "Spin Now" button — only when source === 'form' */}
+        {validation.source === 'form' && (
+          <p className="w-full max-w-sm text-red-500 text-sm font-medium text-center bg-red-50 border border-red-100 rounded-lg px-3 py-2 -mt-4">
+            {validation.message}
+          </p>
+        )}
+
         <SpinWheel
           ref={wheelRef}
           segments={WHEEL_SEGMENTS}
@@ -100,21 +115,6 @@ export default function App() {
             itemName={result.wonItemName}
             onDismiss={() => setResult(null)}
           />
-        )}
-
-        <CustomerForm
-          ref={formRef}
-          onSubmit={handleCustomerSubmit}
-          disabled={spinning}
-          resetSignal={resetSignal}
-          onValidationResult={handleValidationResult}
-        />
-
-        {/* Error from the FORM's own "Spin Now" button — only when source === 'form' */}
-        {validation.source === 'form' && (
-          <p className="w-full max-w-sm text-red-500 text-sm font-medium text-center bg-red-50 border border-red-100 rounded-lg px-3 py-2 -mt-2">
-            {validation.message}
-          </p>
         )}
 
         {errorMsg && (
