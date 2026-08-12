@@ -1,21 +1,8 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 
-// Fixed 10-segment wheel: 1 win slot + 9 "Try Again" slots (matches the real 1/10 backend odds)
-export const WHEEL_SEGMENTS = [
-  { id: 'WIN', name: '🎁 Gift', isWin: true },
-  { id: 'T1', name: 'Try Again', isWin: false },
-  { id: 'T2', name: 'Next Time!', isWin: false },
-  { id: 'T3', name: 'Spin Again!', isWin: false },
-  { id: 'T4', name: 'Try Again', isWin: false },
-  { id: 'T5', name: 'Next Time!', isWin: false },
-  { id: 'T6', name: 'Try Again', isWin: false },
-  { id: 'T7', name: 'Almost!', isWin: false },
-  { id: 'T8', name: 'Try Again', isWin: false },
-  { id: 'T9', name: 'Spin Again!', isWin: false }
-];
+const WIN_COLOR = '#FFC72C';   // solid gold — prize slots
+const LOSE_COLOR = '#FF6B00';  // solid orange — try-again slots
 
-const WIN_COLOR = '#FFC72C';                      // gold — the single winning slot
-const TRY_AGAIN_COLORS = ['#FF6B00', '#FFB27A'];  // alternating orange shades
 const POINTER_GOLD_LIGHT = '#FFE08A';
 const POINTER_GOLD_DARK = '#E8890C';
 const POINTER_OUTLINE = '#7A3E00';
@@ -23,32 +10,33 @@ const POINTER_OUTLINE = '#7A3E00';
 const SPIN_DURATION_MS = 6000;
 const EXTRA_FULL_SPINS = 9;
 
-function colorForSegment(seg, index) {
-  if (seg.isWin) return WIN_COLOR;
-  return TRY_AGAIN_COLORS[index % TRY_AGAIN_COLORS.length];
+const TRY_AGAIN_TEXTS = ['Try Again', 'Next Time!', 'Try Again!', 'Next Time!', 'Try Again'];
+
+export function buildWheelSegments(activeItems) {
+  const items = activeItems || [];
+  const segments = [];
+  for (let i = 0; i < 5; i++) {
+    const item = items[i];
+    segments.push({
+      id: item ? `WIN-${item.IDX}` : `WIN-${i}`,
+      name: item ? `🎁 ${item.ITEM_NAME}` : '🎁 Gift',
+      itemId: item ? item.IDX : null,
+      itemName: item ? item.ITEM_NAME : null,
+      isWin: true
+    });
+    segments.push({
+      id: `T${i}`,
+      name: TRY_AGAIN_TEXTS[i],
+      isWin: false
+    });
+  }
+  return segments;
 }
 
-// Strong deceleration curve — visually similar to the previous cubic-bezier(0.15,0.65,0.1,1)
 function easeOutSpin(t) {
   return 1 - Math.pow(1 - t, 4);
 }
 
-/**
- * segments: fixed WHEEL_SEGMENTS array (10 items)
- * targetIndex: index in `segments` the wheel must land on (from backend result)
- * spinToken: change this value to trigger a new spin animation
- * onSpinComplete: called once the spin animation finishes
- * onCenterClick: called when the center "SPIN" hub is clicked (ignored while isSpinning)
- * isSpinning: disables/greys out the center hub while a spin is in progress
- *
- * NOTE: rotation is driven entirely by requestAnimationFrame (not CSS transition),
- * so the pointer can "tick" at the exact moment each segment boundary passes under it —
- * just like a real prize wheel.
- *
- * Exposes a `scrollIntoView()` method via ref — call this right when a spin is triggered
- * (e.g. from the form's submit handler or wherever spinToken gets bumped) so the wheel
- * scrolls into focus even if the customer form pushed it off-screen.
- */
 const SpinWheel = forwardRef(function SpinWheel({
   segments,
   targetIndex,
@@ -61,7 +49,7 @@ const SpinWheel = forwardRef(function SpinWheel({
   const pointerRef = useRef(null);
   const containerRef = useRef(null);
 
-  const rotationRef = useRef(0);     // current absolute wheel rotation, persists across spins
+  const rotationRef = useRef(0);
   const lastToken = useRef(null);
   const animFrame = useRef(null);
   const lastSegmentCrossed = useRef(0);
@@ -81,9 +69,11 @@ const SpinWheel = forwardRef(function SpinWheel({
     }
   }));
 
+  // Flat solid color per wedge — gold for prizes, orange for try-again.
+  // Each wedge is a single clean color with hard edges, no blending.
   const gradient = useMemo(() => {
     const stops = segments.map((seg, i) => {
-      const color = colorForSegment(seg, i);
+      const color = seg.isWin ? WIN_COLOR : LOSE_COLOR;
       const start = i * segmentAngle;
       const end = start + segmentAngle;
       return `${color} ${start}deg ${end}deg`;
@@ -91,7 +81,6 @@ const SpinWheel = forwardRef(function SpinWheel({
     return `conic-gradient(${stops.join(', ')})`;
   }, [segments, segmentAngle]);
 
-  // Quick spring-like flick of the pointer, done via direct style writes (no re-render).
   const flickPointer = () => {
     const el = pointerRef.current;
     if (!el) return;
@@ -102,12 +91,9 @@ const SpinWheel = forwardRef(function SpinWheel({
     }, 90);
   };
 
-  // Auto-focus/scroll the wheel into view every time a NEW spin starts —
-  // covers the case where the form's own "Spin Now" button was used
-  // (not just the wheel's center hub), so it always self-scrolls.
   useEffect(() => {
     if (spinToken === null || spinToken === undefined) return;
-    if (lastToken.current === spinToken) return; // avoid double-trigger; main effect below also checks this
+    if (lastToken.current === spinToken) return;
     if (containerRef.current) {
       containerRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
@@ -143,7 +129,6 @@ const SpinWheel = forwardRef(function SpinWheel({
         wheelRef.current.style.transform = `rotate(${current}deg)`;
       }
 
-      // Fire a pointer flick each time a segment boundary passes under the pointer
       const segIndexNow = Math.floor(current / segmentAngle);
       if (segIndexNow !== lastSegmentCrossed.current) {
         lastSegmentCrossed.current = segIndexNow;
@@ -190,7 +175,6 @@ const SpinWheel = forwardRef(function SpinWheel({
         }
       `}</style>
 
-      {/* Pointer — glossy 3D gem-style pin, sits still, flicks briefly when a boundary passes beneath it */}
       <div
         ref={pointerRef}
         className="absolute left-1/2 -top-4 z-20"
@@ -204,7 +188,7 @@ const SpinWheel = forwardRef(function SpinWheel({
           <defs>
             <linearGradient id="pointerBodyGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={POINTER_GOLD_LIGHT} />
-              <stop offset="55%" stopColor={WIN_COLOR} />
+              <stop offset="55%" stopColor="#FFC72C" />
               <stop offset="100%" stopColor={POINTER_GOLD_DARK} />
             </linearGradient>
             <radialGradient id="pointerGemGrad" cx="35%" cy="30%" r="70%">
@@ -239,7 +223,6 @@ const SpinWheel = forwardRef(function SpinWheel({
         </svg>
       </div>
 
-      {/* Static outer ring — layered gold + white rim for that board-game look */}
       <div
         className="w-full h-full rounded-full relative"
         style={{
@@ -268,16 +251,18 @@ const SpinWheel = forwardRef(function SpinWheel({
                   className="absolute top-1/2 left-1/2 h-[2px] w-1/2 origin-left"
                   style={{
                     transform: `rotate(${i * segmentAngle - 90}deg)`,
-                    background: 'linear-gradient(to right, rgba(255,255,255,0.55), rgba(255,255,255,0))'
+                    background: 'rgba(255,255,255,0.5)'
                   }}
                 />
                 <div
-                  className="absolute top-1/2 left-1/2 h-9 w-[46%] origin-left flex items-center justify-end pr-5"
+                  className="absolute top-1/2 left-1/2 h-9 w-[46%] origin-left flex items-center justify-end pr-4"
                   style={{ transform: `rotate(${angle}deg)` }}
                 >
                   <span
-                    className="text-[15px] sm:text-base font-bold text-white tracking-wide whitespace-nowrap"
-                    style={{ textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}
+                    className={`font-bold text-white tracking-wide whitespace-nowrap ${
+                      seg.isWin ? 'text-[12px] sm:text-sm' : 'text-[14px] sm:text-base'
+                    }`}
+                    style={{ textShadow: '0 1px 3px rgba(0,0,0,0.55)' }}
                   >
                     {seg.name}
                   </span>
@@ -290,12 +275,11 @@ const SpinWheel = forwardRef(function SpinWheel({
         <div
           className="absolute inset-0 rounded-full pointer-events-none"
           style={{
-            background: 'radial-gradient(circle at 32% 28%, rgba(255,255,255,0.35), rgba(255,255,255,0) 45%)'
+            background: 'radial-gradient(circle at 32% 28%, rgba(255,255,255,0.4), rgba(255,255,255,0) 45%)'
           }}
         />
       </div>
 
-      {/* Center hub — clickable "SPIN" button, gem-style raised look */}
       <button
         type="button"
         onClick={handleCenterClick}

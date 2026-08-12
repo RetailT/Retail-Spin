@@ -1,9 +1,9 @@
-import React, { useRef, useState } from 'react';
-import SpinWheel, { WHEEL_SEGMENTS } from './components/SpinWheel';
+import React, { useEffect, useRef, useState } from 'react';
+import SpinWheel, { buildWheelSegments } from './components/SpinWheel';
 import CustomerForm from './components/CustomerForm';
 import ResultModal from './components/ResultModal';
 import WinCelebration from './components/WinCelebration';
-import { playSpin } from './api/api';
+import { playSpin, fetchSpinItems } from './api/api';
 
 export default function App() {
   const [spinning, setSpinning] = useState(false);
@@ -13,11 +13,36 @@ export default function App() {
   const [showModal, setShowModal] = useState(false);
   const [resetSignal, setResetSignal] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
+  const [activeItems, setActiveItems] = useState([]);
+  // Tracks whether the initial items fetch has completed — the wheel only
+  // renders once this is true, so it never shows generic "🎁 Gift" fallback
+  // placeholders while the real item names are still loading.
+  const [itemsLoaded, setItemsLoaded] = useState(false);
+  const [itemsLoadError, setItemsLoadError] = useState('');
 
   const [validation, setValidation] = useState({ message: '', source: null });
 
   const formRef = useRef(null);
   const wheelRef = useRef(null);
+
+  const segments = buildWheelSegments(activeItems);
+
+  const loadActiveItems = async () => {
+    try {
+      const data = await fetchSpinItems();
+      setActiveItems(data.items || []);
+      setItemsLoadError('');
+    } catch (err) {
+      console.error('Failed to load active items:', err);
+      setItemsLoadError('Could not load prizes. Please refresh the page.');
+    } finally {
+      setItemsLoaded(true);
+    }
+  };
+
+  useEffect(() => {
+    loadActiveItems();
+  }, []);
 
   const handleValidationResult = (message, source) => {
     setValidation({ message: message || '', source: message ? source : null });
@@ -32,7 +57,19 @@ export default function App() {
 
     try {
       const res = await playSpin(customer);
-      const idx = res.isWinner ? 0 : 1 + Math.floor(Math.random() * 9);
+
+      let idx;
+      if (res.isWinner) {
+        const matchedIndex = segments.findIndex(
+          (seg) => seg.isWin && seg.itemId === res.wonItemId
+        );
+        idx = matchedIndex !== -1 ? matchedIndex : 0;
+      } else {
+        const loseIndices = segments
+          .map((seg, i) => (!seg.isWin ? i : null))
+          .filter((i) => i !== null);
+        idx = loseIndices[Math.floor(Math.random() * loseIndices.length)];
+      }
 
       setTargetIndex(idx);
       setResult(res);
@@ -48,6 +85,7 @@ export default function App() {
   const handleSpinComplete = () => {
     setSpinning(false);
     setShowModal(true);
+    loadActiveItems();
   };
 
   const handleModalClose = () => {
@@ -89,6 +127,12 @@ export default function App() {
           </p>
         )}
 
+        {errorMsg && (
+          <p className="w-full max-w-sm text-red-500 text-sm font-medium text-center bg-red-50 border border-red-100 rounded-lg px-3 py-2 -mt-4">
+            {errorMsg}
+          </p>
+        )}
+
         {showCelebration && (
           <WinCelebration
             itemName={result.wonItemName}
@@ -96,24 +140,33 @@ export default function App() {
           />
         )}
 
-        <SpinWheel
-          ref={wheelRef}
-          segments={WHEEL_SEGMENTS}
-          targetIndex={targetIndex}
-          spinToken={spinToken}
-          isSpinning={spinning}
-          onSpinComplete={handleSpinComplete}
-          onCenterClick={handleCenterClick}
-        />
+        {/* Show a loading placeholder in place of the wheel until the real
+            prize names have actually arrived from the backend. */}
+        {!itemsLoaded ? (
+          <div className="w-[92vw] max-w-[26rem] sm:max-w-[30rem] aspect-square mx-auto flex flex-col items-center justify-center gap-4">
+            <div className="w-16 h-16 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin" />
+            <p className="text-gray-400 text-sm font-medium">Loading prizes…</p>
+          </div>
+        ) : itemsLoadError ? (
+          <div className="w-[92vw] max-w-[26rem] sm:max-w-[30rem] aspect-square mx-auto flex flex-col items-center justify-center gap-3 text-center px-6">
+            <p className="text-red-500 text-sm font-medium">{itemsLoadError}</p>
+          </div>
+        ) : (
+          <SpinWheel
+            ref={wheelRef}
+            segments={segments}
+            targetIndex={targetIndex}
+            spinToken={spinToken}
+            isSpinning={spinning}
+            onSpinComplete={handleSpinComplete}
+            onCenterClick={handleCenterClick}
+          />
+        )}
 
         {validation.source === 'wheel' && (
           <p className="w-full max-w-sm text-red-500 text-sm font-medium text-center bg-red-50 border border-red-100 rounded-lg px-3 py-2 -mt-4">
             {validation.message}
           </p>
-        )}
-
-        {errorMsg && (
-          <p className="text-red-500 font-medium text-center max-w-sm text-sm">{errorMsg}</p>
         )}
       </div>
 
