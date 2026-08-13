@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import SpinWheel, { buildWheelSegments } from './components/SpinWheel';
 import CustomerForm from './components/CustomerForm';
 import ResultModal from './components/ResultModal';
+import ErrorModal from './components/ErrorModal';
 import WinCelebration from './components/WinCelebration';
 import { playSpin, fetchSpinItems } from './api/api';
 
@@ -14,10 +15,15 @@ export default function App() {
   const [resetSignal, setResetSignal] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
   const [activeItems, setActiveItems] = useState([]);
-  const [itemsLoaded, setItemsLoaded] = useState(false);
-  const [itemsLoadError, setItemsLoadError] = useState('');
-  // Company name resolved server-side (via caller IP -> tb_SERVER_DETAILS),
-  // shown in the header so it's clear which shop this spin instance belongs to.
+  // Tracks whether the initial page load (items + company fetch) has
+  // completed — the whole app UI only renders once this is true, so the
+  // person always sees a full-page loading state first, never a half-built
+  // page or stale placeholders.
+  const [pageLoading, setPageLoading] = useState(true);
+  // Shown as a popup (ErrorModal) instead of inline text — covers cases like
+  // the company in the URL not matching any shop, or that shop's server
+  // being unreachable (e.g. ?company=SHOPIMO not resolving to a live server).
+  const [pageLoadError, setPageLoadError] = useState('');
   const [companyName, setCompanyName] = useState('');
 
   const [validation, setValidation] = useState({ message: '', source: null });
@@ -27,22 +33,29 @@ export default function App() {
 
   const segments = buildWheelSegments(activeItems);
 
-  const loadActiveItems = async () => {
+  const loadActiveItems = async (isInitialLoad = false) => {
     try {
       const data = await fetchSpinItems();
       setActiveItems(data.items || []);
       setCompanyName(data.companyName || '');
-      setItemsLoadError('');
+      if (isInitialLoad) setPageLoadError('');
     } catch (err) {
       console.error('Failed to load active items:', err);
-      setItemsLoadError('Could not load prizes. Please refresh the page.');
+      // Surface the backend's specific message (company not found, server
+      // unreachable, etc.) rather than a generic one, so the person knows
+      // exactly why — e.g. "company in the URL doesn't match a known shop".
+      const msg =
+        err.response?.data?.message ||
+        'Could not load this shop\'s data. Please check the link and try again.';
+      if (isInitialLoad) setPageLoadError(msg);
     } finally {
-      setItemsLoaded(true);
+      if (isInitialLoad) setPageLoading(false);
     }
   };
 
   useEffect(() => {
-    loadActiveItems();
+    loadActiveItems(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleValidationResult = (message, source) => {
@@ -86,7 +99,7 @@ export default function App() {
   const handleSpinComplete = () => {
     setSpinning(false);
     setShowModal(true);
-    loadActiveItems();
+    loadActiveItems(false);
   };
 
   const handleModalClose = () => {
@@ -101,6 +114,17 @@ export default function App() {
   const formDisabled = spinning || showModal;
 
   const showCelebration = !spinning && result?.isWinner;
+
+  // Full-page loading state: shown the moment the page opens, before any
+  // company/prize data has arrived — covers the entire app, not just the wheel.
+  if (pageLoading) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 px-4">
+        <div className="w-16 h-16 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin" />
+        <p className="text-gray-400 text-sm font-medium">Loading…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center py-12 px-4">
@@ -146,26 +170,15 @@ export default function App() {
           />
         )}
 
-        {!itemsLoaded ? (
-          <div className="w-[92vw] max-w-[26rem] sm:max-w-[30rem] aspect-square mx-auto flex flex-col items-center justify-center gap-4">
-            <div className="w-16 h-16 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin" />
-            <p className="text-gray-400 text-sm font-medium">Loading prizes…</p>
-          </div>
-        ) : itemsLoadError ? (
-          <div className="w-[92vw] max-w-[26rem] sm:max-w-[30rem] aspect-square mx-auto flex flex-col items-center justify-center gap-3 text-center px-6">
-            <p className="text-red-500 text-sm font-medium">{itemsLoadError}</p>
-          </div>
-        ) : (
-          <SpinWheel
-            ref={wheelRef}
-            segments={segments}
-            targetIndex={targetIndex}
-            spinToken={spinToken}
-            isSpinning={spinning}
-            onSpinComplete={handleSpinComplete}
-            onCenterClick={handleCenterClick}
-          />
-        )}
+        <SpinWheel
+          ref={wheelRef}
+          segments={segments}
+          targetIndex={targetIndex}
+          spinToken={spinToken}
+          isSpinning={spinning}
+          onSpinComplete={handleSpinComplete}
+          onCenterClick={handleCenterClick}
+        />
 
         {validation.source === 'wheel' && (
           <p className="w-full max-w-sm text-red-500 text-sm font-medium text-center bg-red-50 border border-red-100 rounded-lg px-3 py-2 -mt-4">
@@ -175,6 +188,7 @@ export default function App() {
       </div>
 
       <ResultModal result={showModal ? result : null} onClose={handleModalClose} />
+      <ErrorModal message={pageLoadError} onClose={() => setPageLoadError('')} />
     </div>
   );
 }
