@@ -2,6 +2,9 @@ const { sql } = require('../config/shopDb');
 
 // GET /api/spin/items -> the CURRENT active 5-item set (based on cycle state),
 // used by the frontend to show which prizes are live right now.
+// Also returns companyName (resolved by resolveShopMiddleware from
+// tb_SERVER_DETAILS based on caller's IP) so the frontend can show which
+// shop is running the spin without a separate API call.
 async function getActiveItems(req, res) {
   try {
     const pool = req.shopPool;
@@ -28,7 +31,12 @@ async function getActiveItems(req, res) {
         ORDER BY IDX ASC
       `);
 
-    res.status(200).json({ success: true, items: result.recordset, itemSet });
+    res.status(200).json({
+      success: true,
+      items: result.recordset,
+      itemSet,
+      companyName: req.companyName || null
+    });
   } catch (err) {
     console.error('getActiveItems error:', err);
     res.status(500).json({ success: false, message: 'Failed to fetch spin items' });

@@ -14,11 +14,11 @@ export default function App() {
   const [resetSignal, setResetSignal] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
   const [activeItems, setActiveItems] = useState([]);
-  // Tracks whether the initial items fetch has completed — the wheel only
-  // renders once this is true, so it never shows generic "🎁 Gift" fallback
-  // placeholders while the real item names are still loading.
   const [itemsLoaded, setItemsLoaded] = useState(false);
   const [itemsLoadError, setItemsLoadError] = useState('');
+  // Company name resolved server-side (via caller IP -> tb_SERVER_DETAILS),
+  // shown in the header so it's clear which shop this spin instance belongs to.
+  const [companyName, setCompanyName] = useState('');
 
   const [validation, setValidation] = useState({ message: '', source: null });
 
@@ -31,6 +31,7 @@ export default function App() {
     try {
       const data = await fetchSpinItems();
       setActiveItems(data.items || []);
+      setCompanyName(data.companyName || '');
       setItemsLoadError('');
     } catch (err) {
       console.error('Failed to load active items:', err);
@@ -105,6 +106,11 @@ export default function App() {
     <div className="min-h-screen bg-background flex flex-col items-center py-12 px-4">
       <div className="w-full max-w-md flex flex-col items-center gap-8">
         <div className="text-center">
+          {companyName && (
+            <p className="text-2xl sm:text-3xl font-extrabold tracking-widest text-primary uppercase mb-2">
+              {companyName}
+            </p>
+          )}
           <h1 className="text-gray-900 text-3xl font-extrabold tracking-tight">
             Gift Item Spin
           </h1>
@@ -140,8 +146,6 @@ export default function App() {
           />
         )}
 
-        {/* Show a loading placeholder in place of the wheel until the real
-            prize names have actually arrived from the backend. */}
         {!itemsLoaded ? (
           <div className="w-[92vw] max-w-[26rem] sm:max-w-[30rem] aspect-square mx-auto flex flex-col items-center justify-center gap-4">
             <div className="w-16 h-16 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin" />
