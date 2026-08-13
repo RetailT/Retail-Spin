@@ -15,14 +15,7 @@ export default function App() {
   const [resetSignal, setResetSignal] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
   const [activeItems, setActiveItems] = useState([]);
-  // Tracks whether the initial page load (items + company fetch) has
-  // completed — the whole app UI only renders once this is true, so the
-  // person always sees a full-page loading state first, never a half-built
-  // page or stale placeholders.
   const [pageLoading, setPageLoading] = useState(true);
-  // Shown as a popup (ErrorModal) instead of inline text — covers cases like
-  // the company in the URL not matching any shop, or that shop's server
-  // being unreachable (e.g. ?company=SHOPIMO not resolving to a live server).
   const [pageLoadError, setPageLoadError] = useState('');
   const [companyName, setCompanyName] = useState('');
 
@@ -41,9 +34,6 @@ export default function App() {
       if (isInitialLoad) setPageLoadError('');
     } catch (err) {
       console.error('Failed to load active items:', err);
-      // Surface the backend's specific message (company not found, server
-      // unreachable, etc.) rather than a generic one, so the person knows
-      // exactly why — e.g. "company in the URL doesn't match a known shop".
       const msg =
         err.response?.data?.message ||
         'Could not load this shop\'s data. Please check the link and try again.';
@@ -151,7 +141,10 @@ export default function App() {
           onValidationResult={handleValidationResult}
         />
 
-        {validation.source === 'form' && (
+        {/* Validation error renders here — right below the form, above the
+            wheel — regardless of whether it was triggered by the form's own
+            button or the wheel's center hub. Never rendered below the wheel. */}
+        {validation.message && (
           <p className="w-full max-w-sm text-red-500 text-sm font-medium text-center bg-red-50 border border-red-100 rounded-lg px-3 py-2 -mt-4">
             {validation.message}
           </p>
@@ -179,12 +172,6 @@ export default function App() {
           onSpinComplete={handleSpinComplete}
           onCenterClick={handleCenterClick}
         />
-
-        {validation.source === 'wheel' && (
-          <p className="w-full max-w-sm text-red-500 text-sm font-medium text-center bg-red-50 border border-red-100 rounded-lg px-3 py-2 -mt-4">
-            {validation.message}
-          </p>
-        )}
       </div>
 
       <ResultModal result={showModal ? result : null} onClose={handleModalClose} />
