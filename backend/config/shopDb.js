@@ -17,7 +17,7 @@ function getShopPool(serverIp, portNo) {
     password: process.env.DB_PASSWORD,
     server: serverIp,
     port: parseInt(portNo, 10),
-    database: process.env.DB_NAME, // POSBACK_SYSTEM — same db name on every shop's server
+    database: process.env.DB_NAME,
     options: {
       encrypt: false,
       trustServerCertificate: true
@@ -27,7 +27,10 @@ function getShopPool(serverIp, portNo) {
       min: 0,
       idleTimeoutMillis: 30000
     },
-    connectionTimeout: 8000
+    connectionTimeout: 6000 // reduced from 8000 — Vercel's default function
+    // timeout is 10s, so this needs enough margin to fail gracefully and
+    // return a proper 503 error response instead of the whole function
+    // getting killed mid-connection-attempt
   };
 
   const poolPromise = new sql.ConnectionPool(shopDbConfig)
